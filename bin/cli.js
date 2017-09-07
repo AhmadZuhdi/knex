@@ -63,8 +63,9 @@ function initKnex(env) {
     process.exit(1);
   }
 
-  if (argv.debug !== undefined)
+  if (argv.debug !== undefined) {
     config.debug = argv.debug;
+  }
   var knex = require(env.modulePath);
   return knex(config);
 }
@@ -111,11 +112,16 @@ function invoke(env) {
   commander
     .command('migrate:make <name>')
     .description('        Create a named migration file.')
+    .option('--attributes', 'Generate table attributes')
     .option(`-x [${filetypes.join('|')}]`, 'Specify the stub extension (default js)')
-    .action(function(name) {
+    .action(function() {
       var instance = initKnex(env);
       var ext = (argv.x || env.configPath.split('.').pop()).toLowerCase();
-      pending = instance.migrate.make(name, {extension: ext}).then(function(name) {
+
+      const name = argv._[1];
+
+      // process.exit();
+      pending = instance.migrate.make(name, {extension: ext, attributes: argv.attributes}).then(function(name) {
         success(chalk.green(`Created Migration: ${name}`));
       }).catch(exit);
     });

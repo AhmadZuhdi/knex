@@ -279,6 +279,7 @@ export default class Migrator {
   _generateStubTemplate() {
     const stubPath = this.config.stub ||
       path.join(__dirname, 'stub', this.config.extension + '.stub');
+
     return Promise.promisify(fs.readFile, {context: fs})(stubPath).then(stub =>
       template(stub.toString(), {variable: 'd'})
     );
@@ -291,6 +292,47 @@ export default class Migrator {
     const dir = this._absoluteConfigDir();
     if (name[0] === '-') name = name.slice(1);
     const filename = yyyymmddhhmmss() + '_' + name + '.' + config.extension;
+
+
+
+    const attributes = config.attributes.split(' ');
+
+    const tableAttributes = attributes.reduce((tableAttr, attr) => {
+
+      let [column, dataType, ...others] = attr.split(':');
+
+      if (others.includes('primary') && !others.includes('unique')) {
+        others.push('unique')
+      }
+
+      const hadReferences = others.findIndex(t => t.startsWith('references'));
+      const hadInTable = others.findIndex(t => t.startsWith('inTable'));
+
+      if (hadReferences >= 0) {
+        let [referencesValue] = others[hadReferences].match(/\'.+?\'/g);
+        if (referencesValue) {
+          referencesValue = referencesValue.replace(/\'/g, '');
+
+          const [column, inTable] = referencesValue.split('@');
+
+          if (inTable && hadInTable < 0) {
+            others[hadReferences] = `references('${column}')`
+            others.splice(hadReferences+1, 0, `inTable('${inTable}')`)
+          }
+        }
+      }
+
+      const attrs = others.map(at => `.${at}${at.endsWith(')') ? '' : '()'}`).join('');
+
+      return `${tableAttr}
+    table.${dataType}('${column}')${attrs};`
+    }, '');
+
+    config.variables = {
+      tableName: name,
+      attributes: tableAttributes
+    };
+
     return Promise.promisify(fs.writeFile, {context: fs})(
       path.join(dir, filename),
       tmpl(config.variables || {})
